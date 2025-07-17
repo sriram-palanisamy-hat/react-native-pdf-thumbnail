@@ -77,27 +77,31 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  @Throws(IOException::class)
   private fun getParcelFileDescriptor(filePath: String): ParcelFileDescriptor? {
     val uri = Uri.parse(filePath)
-    if (ContentResolver.SCHEME_CONTENT == uri.scheme || ContentResolver.SCHEME_FILE == uri.scheme) {
-      return this.reactApplicationContext.contentResolver.openFileDescriptor(uri, "r")
-    } else if (filePath.startsWith("/")) {
-      val file = File(filePath)
-      return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    return when {
+      ContentResolver.SCHEME_CONTENT == uri.scheme || ContentResolver.SCHEME_FILE == uri.scheme -> {
+        this.reactApplicationContext.contentResolver.openFileDescriptor(uri, "r")
+      }
+      filePath.startsWith("/") -> {
+        val file = File(filePath)
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+      }
+      else -> null
     }
-    return null
   }
 
   private fun renderPage(pdfRenderer: PdfRenderer, page: Int, filePath: String, quality: Int): WritableNativeMap {
     val currentPage = pdfRenderer.openPage(page)
     val width = currentPage.width
     val height = currentPage.height
+
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     bitmap.eraseColor(Color.WHITE)
     currentPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
     currentPage.close()
 
-    // Some bitmaps have transparent background which results in a black thumbnail. Add a white background.
     val bitmapWhiteBG = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config ?: Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmapWhiteBG)
     canvas.drawBitmap(bitmap, 0f, 0f, null)
@@ -122,10 +126,9 @@ class PdfThumbnailModule(reactContext: ReactApplicationContext) :
 
   private fun getOutputFilePrefix(filePath: String, page: Int): String {
     val tokens = filePath.split("/")
-    val originalFilename = tokens[tokens.lastIndex]
+    val originalFilename = tokens.last()
     val prefix = originalFilename.replace(".", "-")
-    val generator = Random()
-    val random = generator.nextInt(Integer.MAX_VALUE)
+    val random = Random().nextInt(Int.MAX_VALUE)
     return "$prefix-thumbnail-$page-$random"
   }
 
